@@ -89,7 +89,7 @@ class GrobidClient(ApiClient):
             )
 
         return filename
-
+    
     def process(
         self,
         service,
@@ -301,7 +301,7 @@ class GrobidClient(ApiClient):
 
     def get_server_url(self, service):
         return self.config['grobid_server'] + "/api/" + service
-
+    
     def process_txt(
         self,
         service,
@@ -347,6 +347,72 @@ class GrobidClient(ApiClient):
             )
 
         return (txt_file, status, res.text)
+
+    def process_bytes(
+          self,
+          service,
+          pdf_file,
+          generateIDs=False,
+          consolidate_header=True,
+          consolidate_citations=False,
+          include_raw_citations=False,
+          include_raw_affiliations=False,
+          tei_coordinates=False,
+          segment_sentences=False,
+          force=True,
+          verbose=False,
+      ):
+          pdf_handle = pdf_file
+          files = {
+              "input": (
+                  "ex",
+                  pdf_handle,
+                  "application/pdf",
+                  {"Expires": "0"},
+              )
+          }
+          
+          the_url = self.get_server_url(service)
+
+          # set the GROBID parameters
+          the_data = {}
+          if generateIDs:
+              the_data["generateIDs"] = "1"
+          if consolidate_header:
+              the_data["consolidateHeader"] = "1"
+          if consolidate_citations:
+              the_data["consolidateCitations"] = "1"
+          if include_raw_citations:
+              the_data["includeRawCitations"] = "1"
+          if include_raw_affiliations:
+              the_data["includeRawAffiliations"] = "1"
+          if tei_coordinates:
+              the_data["teiCoordinates"] = self.config["coordinates"]
+          if segment_sentences:
+              the_data["segmentSentences"] = "1"
+
+          try:
+              res, status = self.post(
+                  url=the_url, files=files, data=the_data, headers={"Accept": "text/plain"}, timeout=self.config['timeout']
+              )
+
+              if status == 503:
+                  time.sleep(self.config["sleep_time"])
+                  return self.process_bytes(
+                      service,
+                      pdf_file,
+                      generateIDs,
+                      consolidate_header,
+                      consolidate_citations,
+                      include_raw_citations,
+                      include_raw_affiliations,
+                      tei_coordinates,
+                      segment_sentences
+                  )
+          except requests.exceptions.ReadTimeout:
+              return (pdf_file, 408, None)
+
+          return (pdf_file, status, res.text)
 
 def main():
     valid_services = [
